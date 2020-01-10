@@ -575,19 +575,32 @@ public abstract class AbstractQueuedSynchronizer
      */
     static final long spinForTimeoutThreshold = 1000L;
 
-    /**
-     * Inserts node into queue, initializing if necessary. See picture above.
-     * @param node the node to insert
-     * @return node's predecessor
+
+
+    /***
+     * 使用线程安全的方式，不断重试
+     * 这里通过固定死循环的编程范式，不断重试。将当前线程加入到队列中
+     * @author Nero
+     * @date 2020-01-10
+     * *@param: node
+     * @return java.util.concurrent.locks.AbstractQueuedSynchronizer.Node
      */
     private Node enq(final Node node) {
+
+        //- 这里通过固定死循环的编程范式，不断重试。将当前线程加入到队列中
         for (;;) {
             Node t = tail;
+
+            //- 如果尾节点为空，则说明队列是空的。这个时候触发队列头尾节点的初始化。
             if (t == null) { // Must initialize
                 if (compareAndSetHead(new Node()))
                     tail = head;
             } else {
+
+                //- 如果尾节点不为空，则设置新节点的前驱节点为尾节点
                 node.prev = t;
+
+                //- 设置尾节点的下一个节点为新节点。
                 if (compareAndSetTail(t, node)) {
                     t.next = node;
                     return t;
@@ -596,24 +609,38 @@ public abstract class AbstractQueuedSynchronizer
         }
     }
 
-    /**
-     * Creates and enqueues node for current thread and given mode.
+
+
+
+    /***
      *
-     * @param mode Node.EXCLUSIVE for exclusive, Node.SHARED for shared
-     * @return the new node
+     * 加入当前线程到等待队列中
+     * @author Nero
+     * @date 2020-01-10
+     * *@param: mode
+     * @return java.util.concurrent.locks.AbstractQueuedSynchronizer.Node
      */
     private Node addWaiter(Node mode) {
+        //- 构造一个等待节点
         Node node = new Node(Thread.currentThread(), mode);
-        // Try the fast path of enq; backup to full enq on failure
+
+
+        //- 设置当前线程的节点插入到队尾，首先是当前节点的单向关联，也就是当前新节点的上一个节点，设置为队尾
         Node pred = tail;
         if (pred != null) {
             node.prev = pred;
+
+            //- 通过cas原子设置队尾指向新节点
             if (compareAndSetTail(pred, node)) {
                 pred.next = node;
                 return node;
             }
         }
+
+        //- 上面如果入队成功，就直接return了。如果入队不成功，出现了线程并发，则调用enq不断重试，加入队列
         enq(node);
+
+
         return node;
     }
 
@@ -858,14 +885,28 @@ public abstract class AbstractQueuedSynchronizer
         boolean failed = true;
         try {
             boolean interrupted = false;
+
+
+
+            //-
             for (;;) {
+
+                //- 获取当前节点的前驱节点
                 final Node p = node.predecessor();
+
+                //- 因为头节点是虚节点，所以，将头节点和当前节点的前驱节点比较，如果相等，也就是说当前节点是真实队列的头节点
+                //- 头节点则尝试获取锁
                 if (p == head && tryAcquire(arg)) {
+
+                    //-
                     setHead(node);
                     p.next = null; // help GC
                     failed = false;
                     return interrupted;
                 }
+
+
+                //- 如果失败，则阻塞
                 if (shouldParkAfterFailedAcquire(p, node) &&
                     parkAndCheckInterrupt())
                     interrupted = true;
@@ -1195,6 +1236,11 @@ public abstract class AbstractQueuedSynchronizer
      *        can represent anything you like.
      */
     public final void acquire(int arg) {
+        //- tryAcquire(arg) 再次尝试获取锁
+        //- 再次获取锁失败，则添加至等待队列
+
+        //- addWaiter为加入到等待队列
+
         if (!tryAcquire(arg) &&
             acquireQueued(addWaiter(Node.EXCLUSIVE), arg))
             selfInterrupt();

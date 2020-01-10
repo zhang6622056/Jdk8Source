@@ -122,11 +122,21 @@ public class ReentrantLock implements Lock, java.io.Serializable {
          */
         abstract void lock();
 
+
+
+
+
         /**
-         * Performs non-fair tryLock.  tryAcquire is implemented in
-         * subclasses, but both need nonfair try for trylock method.
+         *
+         * 非公平的获取锁，调用链为 acquire->tryAcquire->nonfairTryAcquire
+         * @author Nero
+         * @date 2020-01-10
+         * *@param: acquires
+         * @return boolean
          */
         final boolean nonfairTryAcquire(int acquires) {
+
+            //- 尝试获取锁
             final Thread current = Thread.currentThread();
             int c = getState();
             if (c == 0) {
@@ -135,6 +145,8 @@ public class ReentrantLock implements Lock, java.io.Serializable {
                     return true;
                 }
             }
+
+            //- 如果当前锁被持有，则判定是否是当前线程，以此来实现重入
             else if (current == getExclusiveOwnerThread()) {
                 int nextc = c + acquires;
                 if (nextc < 0) // overflow
@@ -142,6 +154,8 @@ public class ReentrantLock implements Lock, java.io.Serializable {
                 setState(nextc);
                 return true;
             }
+
+            //- 获取失败
             return false;
         }
 
@@ -198,17 +212,23 @@ public class ReentrantLock implements Lock, java.io.Serializable {
     static final class NonfairSync extends Sync {
         private static final long serialVersionUID = 7316153563782823691L;
 
-        /**
-         * Performs lock.  Try immediate barge, backing up to normal
-         * acquire on failure.
-         */
+        //- 同步器，获取锁
         final void lock() {
+
+            //- cas尝试设置独占锁
             if (compareAndSetState(0, 1))
+                //- 设置当前持有锁的线程
                 setExclusiveOwnerThread(Thread.currentThread());
-            else
+            else{
+
+                //- 加锁失败,Sync.acquire
                 acquire(1);
+            }
+
         }
 
+
+        //- 获取锁失败之后的处理，由AQS的acquire（）方法，调用到这里tryAcquire
         protected final boolean tryAcquire(int acquires) {
             return nonfairTryAcquire(acquires);
         }
